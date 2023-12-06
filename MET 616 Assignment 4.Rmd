@@ -1,0 +1,287 @@
+---
+title: "MET 616 Assignment 4"
+author: "JingjianGao"
+date: "2023-11-29"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Question 1
+```{r}
+# Code from Assignmtn #3
+library(ggplot2)
+
+set.seed(100)
+mean_fixed_cost <- 300e6  
+std_dev_fixed_cost <- 60e6 
+retail_price_initial <- 150000 # Initial retail price
+retail_price_final <- 70000  # Final retail price after two years
+min_variable_cost <- 77000  
+most_likely_variable_cost <- 90000  
+max_variable_cost <- 100000  
+n_simulations <- 10000
+
+# The Demand ranges and their probabilities
+demand_ranges <- list(c(2000, 5000), c(5001, 10000), c(10001, 14000), c(14001, 15000))
+probabilities <- c(0.35, 0.40, 0.20, 0.05)
+
+
+simulation_demand <- function() {
+  index <- sample(1:length(demand_ranges), size = 1, prob = probabilities)
+  return(sample(demand_ranges[[index]][1]:demand_ranges[[index]][2], size = 1))
+}
+
+simulation_profit <- function(n_boats) {
+  fixed_costs <- rnorm(n_simulations, mean_fixed_cost, std_dev_fixed_cost)
+  variable_costs <- runif(n_simulations, min_variable_cost, max_variable_cost)
+  profits <- numeric(n_simulations)
+  
+  for (i in 1:n_simulations) {
+    demand <- simulation_demand()
+    units_sold_at_high_price <- min(n_boats, demand)
+    units_sold_at_low_price <- max(n_boats - demand, 0)
+    total_variable_cost <- variable_costs[i] * n_boats
+    total_cost <- fixed_costs[i] + total_variable_cost
+    total_revenue_high <- retail_price_initial * units_sold_at_high_price
+    total_revenue_low <- retail_price_final * units_sold_at_low_price
+    profits[i] <- total_revenue_high + total_revenue_low - total_cost
+  }
+  
+  return(profits)
+}
+
+# a)
+
+# Function to calculate confidence intervals
+calculate_ci <- function(data) {
+  mean_profit <- mean(data)
+  std_dev_profit <- sd(data)
+  n <- length(data)
+  
+  se <- std_dev_profit / sqrt(n)
+  z_80 <- qnorm(0.9)  # For 80% CI
+  z_95 <- qnorm(0.975)  # For 95% CI
+  
+  ci_80 <- z_80 * se
+  ci_95 <- z_95 * se
+  
+  return(list(mean_profit = mean_profit, ci_80 = ci_80, ci_95 = ci_95))
+}
+
+boats <- seq(2000, 15000, by = 1000)
+profits_data <- sapply(boats, function(boats_count) {
+  profits <- simulation_profit(boats_count)
+  cis <- calculate_ci(profits)
+  c(mean_profit = cis$mean_profit, ci_80 = cis$ci_80, ci_95 = cis$ci_95)
+})
+
+profits_df <- data.frame(Boats = boats, t(profits_data))
+
+# Plot
+ggplot(profits_df, aes(x = Boats, y = mean_profit)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = mean_profit - ci_80, ymax = mean_profit + ci_80), alpha = 0.3) +
+  labs(
+    title = "GWS' Profit and 80% Confidence Intervals",
+    x = "Number of Boats",
+    y = "Profit"
+  ) +
+  theme_minimal()
+
+ggplot(profits_df, aes(x = Boats, y = mean_profit)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = mean_profit - ci_95, ymax = mean_profit + ci_95), alpha = 0.2) +
+  labs(
+    title = "GWS' Profit and 95% Confidence Intervals",
+    x = "Number of Boats",
+    y = "Profit"
+  ) +
+  theme_minimal()
+
+# b)
+
+simulation_profit_specific <- function(n_boats, n_simulations) {
+  profits <- simulation_profit(n_boats)
+  return(data.frame(Boats = rep(n_boats, n_simulations), Profit = profits))
+}
+
+boats_to_simulate <- c(2000, 4000, 6000, 8000, 10000, 12000, 14000)
+n_simulations <- 10000
+
+profits_data <- lapply(boats_to_simulate, function(boats_count) {
+  simulation_profit_specific(boats_count, n_simulations)
+})
+
+combined_data <- do.call(rbind, profits_data)
+
+# Density plots
+ggplot(combined_data, aes(x = Profit, fill = factor(Boats))) +
+  geom_density(alpha = 0.5) +
+  labs(
+    title = "Distribution of GWS' Profit at Different Boat Production Levels",
+    x = "Profit",
+    y = "Density"
+  ) +
+  scale_fill_discrete(name = "Boats Produced") +
+  theme_minimal()
+
+# c)
+
+# i)
+calculate_mean_profit <- function(n_boats) {
+  profits <- simulation_profit(n_boats)
+  return(mean(profits))
+}
+
+boat_levels <- seq(2000, 15000, by = 1000)
+
+mean_profits <- sapply(boat_levels, calculate_mean_profit)
+
+optimal_boats_mean_profit <- boat_levels[which.max(mean_profits)]
+
+optimal_boats_mean_profit
+
+# ii) 10th percentile
+calculate_10th_percentile <- function(n_boats) {
+  profits <- simulation_profit(n_boats)
+  return(quantile(profits, 0.1))
+}
+
+percentile_10th <- sapply(boat_levels, calculate_10th_percentile)
+
+optimal_boats_10th_percentile <- boat_levels[which.max(percentile_10th)]
+
+optimal_boats_10th_percentile
+
+# iii)
+
+simulation_profit <- function(n_boats) {
+  fixed_costs <- rnorm(n_simulations, mean_fixed_cost, std_dev_fixed_cost)
+  variable_costs <- runif(n_simulations, min_variable_cost, max_variable_cost)
+  profits <- numeric(n_simulations)
+  profitable_simulations <- rep(0, n_simulations) 
+  
+  for (i in 1:n_simulations) {
+    demand <- simulation_demand()
+    units_sold_at_high_price <- min(n_boats, demand)
+    units_sold_at_low_price <- max(n_boats - demand, 0)
+    total_variable_cost <- variable_costs[i] * n_boats
+    total_cost <- fixed_costs[i] + total_variable_cost
+    total_revenue_high <- retail_price_initial * units_sold_at_high_price
+    total_revenue_low <- retail_price_final * units_sold_at_low_price
+    profit <- total_revenue_high + total_revenue_low - total_cost
+    
+    if (profit >= 50e6) {
+      profitable_simulations[i] <- 1 
+    }
+    profits[i] <- profit
+  }
+  
+  return(list(profits = profits, profitable_simulations = profitable_simulations))
+}
+
+calculate_probability_profit_50m <- function(n_boats) {
+  results <- simulation_profit(n_boats)
+  profitable_simulations_count <- sum(results$profitable_simulations)
+  probability_profit_50m <- profitable_simulations_count / n_simulations
+  return(probability_profit_50m)
+}
+
+boat_levels <- seq(2000, 15000, by = 1000)
+
+prob_50m <- sapply(boat_levels, calculate_probability_profit_50m)
+
+prob_50m
+
+```
+
+## Question 2
+
+```{r}
+# a)
+library(DEoptim)
+
+calculate_expected_profit <- function(x) {
+  a <- x[1]
+  b <- x[2]
+  trials <- 10000
+  total_profit <- numeric(trials)
+  for (i in 1:trials) {
+    value_a <- qlnorm(runif(1), meanlog = log(2 * a), sdlog = log(3 * a))
+    value_b <- qlnorm(runif(1), meanlog = log(1.6 * b), sdlog = log(2 * b))
+    total_value <- value_a + value_b
+    
+    total_profit[i] <- max(0, total_value * 0.85 - a - b)
+  }
+  
+
+  expected_profit <- -mean(total_profit)
+  return(expected_profit)
+}
+
+lower <- c(1, 1)
+upper <- c(100, 100)
+
+result <- DEoptim(calculate_expected_profit, lower, upper)
+
+optimal_investment <- result$optim$bestmem
+optimal_profit <- -result$optim$bestval 
+
+print(paste("Optimal Investment in Company A:", optimal_investment[1]))
+print(paste("Optimal Investment in Company B:", optimal_investment[2]))
+print(paste("Expected Profit:", optimal_profit))
+
+# b)
+calculate_expected_profit_with_constraint_tax_updated <- function(x) {
+  a <- x[1] 
+  b <- x[2] 
+  trials <- 10000
+  total_profit <- numeric(trials)
+  
+  for (i in 1:trials) {
+    value_a <- qlnorm(runif(1), meanlog = log(2 * a), sdlog = log(3 * a))
+    value_b <- qlnorm(runif(1), meanlog = log(1.6 * b), sdlog = log(2 * b))
+    
+    total_value <- value_a + value_b
+    
+    profit_before_tax <- total_value - a - b
+    
+    if (profit_before_tax > 100e6) {
+      positive_profit_tax <- (profit_before_tax - 100e6) * 0.15
+      total_profit[i] <- max(0, profit_before_tax - positive_profit_tax)
+    } else {
+      total_profit[i] <- max(0, profit_before_tax)
+    }
+  }
+
+  expected_profit <- -mean(total_profit)  
+  
+  after_tax_60m <- 60e6 / 0.85
+  prob_after_tax_60m <- sum(total_profit >= (after_tax_60m - a - b)) / trials
+  
+  constraint <- ifelse(prob_after_tax_60m >= 0.95, 0, 1e6)  
+  return(expected_profit + constraint)  
+}
+
+lower <- c(1, 1)  
+upper <- c(100, 100)
+
+result_constraint_tax_updated <- DEoptim(calculate_expected_profit_with_constraint_tax_updated, lower, upper)
+
+
+optimal_investment_constraint_tax_updated <- result_constraint_tax_updated$optim$bestmem
+optimal_profit_constraint_tax_updated <- result_constraint_tax_updated$optim$bestval  
+
+
+print(paste("Optimal Investment in Company A (with updated tax & constraint):", optimal_investment_constraint_tax_updated[1]))
+print(paste("Optimal Investment in Company B (with updated tax & constraint):", optimal_investment_constraint_tax_updated[2]))
+print(paste("Expected Profit (with updated tax & constraint):", optimal_profit_constraint_tax_updated))
+
+
+```
+
